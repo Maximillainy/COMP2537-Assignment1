@@ -1,4 +1,4 @@
-require("../utils.js");
+// require("../utils.js");
 
 require('dotenv').config();
 const express = require('express');
@@ -24,7 +24,8 @@ const mongodb_session_secret = process.env.MONGODB_SESSION_SECRET;
 
 const node_session_secret = process.env.NODE_SESSION_SECRET;
 
-var {database} = include('databaseConnection');
+// var {database} = include('databaseConnection');
+const database = require('../databaseConnection');
 
 const userCollection = database.db(mongodb_database).collection('users');
 
@@ -190,7 +191,7 @@ app.get('/logout', (req,res) => {
 });
 
 
-app.use(express.static(__dirname + "/public"));
+app.use(express.static(__dirname + "/../public"));
 
 app.get("*", (req,res) => {
 	res.status(404);
