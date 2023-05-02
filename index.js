@@ -48,7 +48,9 @@ app.use(session({
 app.get('/', (req, res) => {
     if (req.session.authenticated) {
         res.send(`
-            <a href="/members">Members</a>
+            Hello, ${req.session.username}!
+            <br>
+            <a href="/members">Members Area</a>
             <br>
             <a href="/logout">Sign Out</a>
         `);
@@ -67,8 +69,9 @@ app.get('/members', (req, res) => {
     } else {
         const randomImage = Math.floor(Math.random() * 3) + 1;
         res.send(`
-            <h1>Members Page</h1>
-            <img src="/images/image${randomImage}.jpg" alt="Random image" />
+            Hello, ${req.session.username}.
+            <br>
+            <img style="width: 200px; height: 200px;" src="image${randomImage}.jpg" alt="Random image ${randomImage}" />
             <br>
             <a href="/logout">Sign Out</a>
         `);
@@ -80,6 +83,7 @@ app.get('/createUser', (req,res) => {
     create user
     <form action='/submitUser' method='post'>
     <input name='username' type='text' placeholder='username'>
+    <input name='email' type='text' placeholder='email'>
     <input name='password' type='password' placeholder='password'>
     <button>Submit</button>
     </form>
@@ -92,7 +96,7 @@ app.get('/login', (req,res) => {
     var html = `
     log in
     <form action='/loggingin' method='post'>
-    <input name='username' type='text' placeholder='username'>
+    <input name='email' type='text' placeholder='email'>
     <input name='password' type='password' placeholder='password'>
     <button>Submit</button>
     </form>
@@ -102,82 +106,87 @@ app.get('/login', (req,res) => {
 
 app.post('/submitUser', async (req,res) => {
     var username = req.body.username;
+    var email = req.body.email;
     var password = req.body.password;
 
 	const schema = Joi.object(
 		{
 			username: Joi.string().alphanum().max(20).required(),
+            email: Joi.string().email().required(),
 			password: Joi.string().max(20).required()
 		});
 	
-	const validationResult = schema.validate({username, password});
+	const validationResult = schema.validate({username, email, password});
 	if (validationResult.error != null) {
-	   console.log(validationResult.error);
-	   res.redirect("/createUser");
-	   return;
+        const errorMessage = validationResult.error.details[0].message;
+        res.send(`
+        ${errorMessage}
+        <br>
+        <a href="/createUser">Try again</a>
+        `);
+        return;
    }
 
     var hashedPassword = await bcrypt.hash(password, saltRounds);
 	
-	await userCollection.insertOne({username: username, password: hashedPassword});
+	await userCollection.insertOne({username: username, email, password: hashedPassword});
 	console.log("Inserted user");
 
-    var html = "successfully created user";
-    res.send(html);
+    res.redirect('/members');
 });
 
 app.post('/loggingin', async (req,res) => {
-    var username = req.body.username;
+    var email = req.body.email;
     var password = req.body.password;
 
 	const schema = Joi.string().max(20).required();
-	const validationResult = schema.validate(username);
+	const validationResult = schema.validate(email);
 	if (validationResult.error != null) {
+        const errorMessage = validationResult.error.details[0].message;
 	   console.log(validationResult.error);
-	   res.redirect("/login");
+	   res.send(`
+        ${errorMessage}
+        <br>
+        <a href="/login">Try again</a>
+        `);
 	   return;
 	}
 
-	const result = await userCollection.find({username: username}).project({username: 1, password: 1, _id: 1}).toArray();
+	const result = await userCollection.findOne({email});
 
 	console.log(result);
-	if (result.length != 1) {
+	if (!result) {
 		console.log("user not found");
-		res.redirect("/login");
-		return;
+        res.send(`
+         invalid email
+         <br>
+         <a href="/login">Try again</a>
+         `);
+        return;
 	}
-	if (await bcrypt.compare(password, result[0].password)) {
+	if (await bcrypt.compare(password, result.password)) {
 		console.log("correct password");
 		req.session.authenticated = true;
-		req.session.username = username;
+		req.session.username = result.username;
 		req.session.cookie.maxAge = expireTime;
 
-		res.redirect('/loggedIn');
+		res.redirect('/members');
 		return;
 	}
 	else {
 		console.log("incorrect password");
-		res.redirect("/login");
+        res.send(`
+         invalid password
+         <br>
+         <a href="/login">Try again</a>
+         `);
 		return;
 	}
 });
 
-app.get('/loggedin', (req,res) => {
-    if (!req.session.authenticated) {
-        res.redirect('/login');
-    }
-    var html = `
-    You are logged in!
-    `;
-    res.send(html);
-});
-
 app.get('/logout', (req,res) => {
 	req.session.destroy();
-    var html = `
-    You are logged out.
-    `;
-    res.send(html);
+    res.redirect('/');
 });
 
 
